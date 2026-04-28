@@ -1,12 +1,15 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.IO;
+using System.Text.Json;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Expense
 {
     class Program
     {
-        private static readonly List<ExpenseItem> _expenses = [];
-        private const string FilePath = "expenses.json";
+        private static readonly List<ExpenseItem> _expenses = new List<ExpenseItem>();
+        private static readonly string FilePath = Path.Combine(AppContext.BaseDirectory, "expenses.json");
 
         static void Main()
         {
@@ -23,7 +26,8 @@ namespace Expense
                 [1]. Add Expense
                 [2]. View Expenses
                 [3]. Delete All Expenses
-                [4]. Exit
+                [4]. Delete by Index
+                [5]. Exit
                 """.Trim());
                 Console.Write("Choose menu: ");
                 string choice = Console.ReadLine();
@@ -92,6 +96,28 @@ namespace Expense
                         break;
 
                     case "4":
+                        if (_expenses.Count == 0)
+                        {
+                            Console.WriteLine("No expenses to delete.");
+                        }
+                        else
+                        {
+                            DisplayExpenses();
+                            Console.WriteLine("Enter the index of the expense to delete: ");
+                            if (int.TryParse(Console.ReadLine(), out int index) && index > 0 && index <= _expenses.Count)
+                            {
+                                _expenses.RemoveAt(index - 1);
+                                SaveExpensesToFile();
+                                Console.WriteLine("Expense deleted.");
+                            }
+                            else
+                            {
+                                Console.WriteLine("Invalid index.");
+                            }
+                        }
+                        break;
+
+                    case "5":
                         Console.WriteLine("Exiting...");
                         return;
 
@@ -114,23 +140,42 @@ namespace Expense
 
         private static void SaveExpensesToFile()
         {
-            string jsonString = JsonSerializer.Serialize(_expenses, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(FilePath, jsonString);
-            Console.WriteLine("Expenses saved to file.");
+            try
+            {
+                string jsonString = JsonSerializer.Serialize(_expenses, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(FilePath, jsonString);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to save expenses to file: {ex.Message}");
+            }
         }
 
         private static void ReadJsonFile()
         {
-            if (File.Exists(FilePath))
+            try
             {
-                SaveExpensesToFile();
-                return;
-            }
-            string jsonString = File.ReadAllText(FilePath);
-            List<ExpenseItem> expensesFromFile = JsonSerializer.Deserialize<List<ExpenseItem>>(jsonString);
+                if (!File.Exists(FilePath))
+                {
+                    // create an empty file so subsequent runs have a file to read
+                    SaveExpensesToFile();
+                    return;
+                }
 
-            _expenses.Clear();
-            _expenses.AddRange(expensesFromFile ?? new List<ExpenseItem>());
+                string jsonString = File.ReadAllText(FilePath);
+                var expensesFromFile = JsonSerializer.Deserialize<List<ExpenseItem>>(jsonString);
+
+                _expenses.Clear();
+                if (expensesFromFile != null)
+                    _expenses.AddRange(expensesFromFile);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load expenses from file: {ex.Message}");
+                _expenses.Clear();
+                // Attempt to recreate the file with an empty list so app can continue
+                try { SaveExpensesToFile(); } catch { }
+            }
         }
     }
 }
